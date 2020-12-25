@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Created on Thu Dec 24 09:31:41 2020
-
 @author: batho
 """
 
@@ -9,6 +8,9 @@ import pyaudio
 import numpy as np
 import requests as req
 from time import sleep
+import threading
+import warnings
+warnings.filterwarnings("ignore")
 np.set_printoptions(suppress=True) # don't use scientific notation
 
 CHUNK = 1024*2 # number of data points to read at a time
@@ -24,8 +26,22 @@ red=np.random.randint(255)
 green=np.random.randint(255)
 blue=np.random.randint(255)
 prevPeak=0
+
+def callRainbow():
+    req.get("http://192.168.8.107/rainbow")
+def callStrip(ledNumbers,red, green, blue):
+    req.get("http://192.168.8.107/setStrip?total={}&r={}&g={}&b={}".format(
+                ledNumbers,red, green, blue))
+def threadRainbow():
+    t = threading.Thread(target=callRainbow)
+    t.daemon = True
+    t.start()
+def threadStrip(ledNumbers,red, green, blue):
+    t = threading.Thread(target=callStrip, args=(ledNumbers,red, green, blue))
+    t.daemon = True
+    t.start()
 try:
-    for i in range(8000):
+    while True:
         if change%500:
             red=np.random.randint(255)
             green=np.random.randint(255)
@@ -39,26 +55,14 @@ try:
         freq = freq[:int(len(freq)/2)] # keep only first half
         assert freq[-1]>TARGET, "ERROR: increase chunk size"
         val = fft[np.where(freq>TARGET)[0][0]]
-        if val>10000:
-            val/=10
-        ledNumbers=int(np.interp(val/10,[0,1024], [0,30]))
+        ledNumbers=int(np.interp(val/10,[0,800], [0,30]))
         
         if ledNumbers < 2 and (5<= peak <60) and 10<(prevPeak-peak)<30:
-            print("I am here yay")
-            try:
-                req.get("http://192.168.8.107/rainbow")
-                sleep(0.030)
-            except ConnectionResetError:
-                pass
+            threadRainbow()
         else:
-            try:
-                req.get("http://192.168.8.107/setStrip?total={}&r={}&g={}&b={}".format(
-                    ledNumbers,red, green, blue))
-                sleep(0.02)
-            except ConnectionResetError:
-                 pass
+            threadStrip(ledNumbers,red, green, blue)
         prevPeak=peak
-    #print(str(ledNumbers)+":"+str(val/10)+":"+ int(val/10)*"*")
+        #print(str(ledNumbers)+":"+str(val/10)+":"+ int(val/10)*"*")
    
 except KeyboardInterrupt:
 # close the stream gracefully
